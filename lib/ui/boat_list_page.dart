@@ -1,159 +1,232 @@
-import 'package:boat_shop/widget/animated_custom_appbar.dart';
 import 'package:flutter/material.dart';
 
 import '../data/local.dart';
+import '../widget/app_bar.dart';
+import '../widget/title_boat.dart';
 import 'app_detail_page.dart';
+
 
 const int timeAnimation = 560;
 
-class BoatListPage extends StatefulWidget {
-  const BoatListPage({Key? key}) : super(key: key);
-
+class HomePage extends StatefulWidget {
   @override
-  State<BoatListPage> createState() => _BoatListPageState();
+  _HomePageState createState() => _HomePageState();
 }
 
-class _BoatListPageState extends State<BoatListPage>
+class _HomePageState extends State<HomePage>
     with SingleTickerProviderStateMixin {
-  final PageController _pageController = PageController();
-  late AnimationController _animationController;
-  double page = 0.0;
-  double currentAppBarPosition = 0.0;
+  late AnimationController animationCtr;
+
+  late Animation<double> rotacion;
+  late Animation<double> _xOffsetBoat;
+  late Animation<double> _yOffsetBoat;
+  late Animation<double> opacity;
+
+  final _pageController = PageController(viewportFraction: 0.66);
+  double _currentPage = 0.0;
+  bool _isDetail = false;
+
+  void _listener() {
+    setState(() {
+      _currentPage = _pageController.page!;
+    });
+  }
 
   @override
   void initState() {
-    // TODO: implement initState
-    _pageController.addListener(_listScroll);
-    _animationController = AnimationController(
-        vsync: this,
-        duration: Duration(milliseconds: 400),
-        reverseDuration: Duration(milliseconds: 1000));
+    animationCtr = new AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: timeAnimation),
+    );
+    rotacion = Tween(begin: 0.0, end: -1.57).animate(CurvedAnimation(
+        parent: animationCtr, curve: Cubic(0.68, -0.4, 0.265, 1.4)));
+
+    _xOffsetBoat = Tween(begin: 0.0, end: 60.0).animate(CurvedAnimation(
+        parent: animationCtr, curve: Cubic(0.68, -0.4, 0.265, 1.4)));
+
+    _yOffsetBoat = Tween(begin: 0.0, end: 176.0).animate(CurvedAnimation(
+        parent: animationCtr, curve: Cubic(0.68, -0.4, 0.265, 1.4)));
+    //Curves.Curves.easeInOutBack
+    opacity = CurvedAnimation(
+        parent: animationCtr, curve: Interval(0.3, 0.9, curve: Curves.linear));
+
+    _pageController.addListener(_listener);
+
     super.initState();
   }
 
   @override
   void dispose() {
-    // TODO: implement dispose
-    _animationController.dispose();
-    _pageController.removeListener(_listScroll);
+    _pageController.removeListener(_listener);
     _pageController.dispose();
     super.dispose();
   }
 
-  void _listScroll() {
-    setState(() {
-      page = _pageController.page!;
-    });
-  }
-
-  Future<void> onTap(Boat boat) async {
-    _animationController.forward();
-    setState(() {
-      currentAppBarPosition = -20;
-    });
-    await Navigator.of(context).push(
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) {
-          return FadeTransition(
-            opacity: animation,
-            child: BoatDetailPage(boat: boat),
-          );
-        },
-      ),
-    );
-    setState(() {
-      currentAppBarPosition = 0;
-    });
-    _animationController.reverse();
-  }
-
   @override
   Widget build(BuildContext context) {
-    Size size = MediaQuery.of(context).size;
-    return Scaffold(
-      body: Container(
-        padding: EdgeInsets.only(top: 70, left: 20, right: 20),
-        child: Stack(
-          children: [
-            AnimatedPositioned(
-              duration: Duration(milliseconds: 200),
-              child: Container(
-                width: size.width,
-                child: Text(
-                  "Boats",
-                  textAlign: TextAlign.left,
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ),
-            Container(
-              width: size.width,
-              height: size.height - 110,
-              child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: Boat.listBoat.length,
-                  itemBuilder: (context, index) {
-                    final percent = (page - index).abs().clamp(0.0, 1.0);
-                    final scale = (page - index).abs().clamp(0.0, 0.3);
-                    final opacity = percent.clamp(0.0, 0.6);
-                    final boat = Boat.listBoat[index];
+    final size = MediaQuery.of(context).size;
 
-                    return Transform.scale(
-                      scale: 1 - scale,
-                      child: Opacity(
-                        opacity: (1 - opacity),
-                        child: boatWidget(
-                            boat: boat, size: size, onTap: () => onTap(boat)),
+    return Scaffold(
+      body: SafeArea(
+        child: SizedBox(
+            height: double.infinity,
+            child: Stack(
+              children: [
+                AnimatedBuilder(
+                  child: const AppBarBoat(),
+                  animation: animationCtr,
+                  builder: ( context,  child) {
+                    return Transform.translate(
+                        offset: Offset(0, opacity.value * -28),
+                        child: Opacity(
+                          opacity: 1 - opacity.value,
+                          child: child,
+                        ));
+                  },
+                ),
+                Container(
+                  child: PageView.builder(
+                    physics: !_isDetail
+                        ? BouncingScrollPhysics()
+                        : NeverScrollableScrollPhysics(),
+                    controller: _pageController,
+                    itemCount: Data.boats.length,
+                    itemBuilder: (BuildContext context, int i) {
+                      final percentLeft = (_currentPage - i);
+                      final percentRight = (i - _currentPage);
+
+                      final scaleLetf = (percentLeft - 0.4).clamp(0.0, 0.3);
+                      final scaleRight = (percentRight - 0.4).clamp(0.0, 0.3);
+
+                      final opacityLetf = percentLeft.clamp(0.0, 1.0);
+                      final opacityRight = percentRight.clamp(0.0, 1.0);
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 70),
+                        child: Opacity(
+                            opacity: (i < _currentPage)
+                                ? (1 - opacityLetf)
+                                : (1 - opacityRight),
+                            child: Column(
+                              children: [
+                                Transform(
+                                    alignment: Alignment.center,
+                                    transform: Matrix4.identity()
+                                      ..scale((i < _currentPage)
+                                          ? 1 - scaleLetf
+                                          : 1 - scaleRight),
+                                    child: AnimatedBuilder(
+                                      child: Container(
+                                        child: Image(
+                                          image: AssetImage(Data.boats[i].img),
+                                          width: size.width * 0.4,
+                                          height: size.height * 0.6,
+                                          fit: BoxFit.contain,
+                                        ),
+                                      ),
+                                      animation: animationCtr,
+                                      builder:
+                                          ( context,  child) {
+                                        return Transform.translate(
+                                          offset: Offset(_xOffsetBoat.value,
+                                              -_yOffsetBoat.value),
+                                          child: Transform.rotate(
+                                              angle: rotacion.value,
+                                              child: child),
+                                        );
+                                      },
+                                    )),
+                                const SizedBox(
+                                  height: 20,
+                                ),
+                                AnimatedBuilder(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.center,
+                                    children: [
+                                      TitleBoat(
+                                        title: Data.boats[i].title,
+                                        by: Data.boats[i].by,
+                                        isDetail: false,
+                                      ),
+                                      GestureDetector(
+                                          onTap: !_isDetail
+                                              ? () {
+                                            _isDetail = true;
+                                            animationCtr.forward();
+                                            setState(() {});
+                                          }
+                                              : null,
+                                          child: Container(
+                                            alignment: Alignment.center,
+                                            width: 100,
+                                            child: Row(
+                                              mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  'SPEC',
+                                                  style: TextStyle(
+                                                      color: Color(0xff192298),
+                                                      fontSize: 17,
+                                                      fontWeight:
+                                                      FontWeight.w600,
+                                                      letterSpacing: 1.5),
+                                                ),
+                                                const SizedBox(
+                                                  width: 4,
+                                                ),
+                                                Icon(
+                                                  Icons.arrow_forward_ios,
+                                                  color: Color(0xff192298),
+                                                  size: 15,
+                                                )
+                                              ],
+                                            ),
+                                          )),
+                                    ],
+                                  ),
+                                  animation: animationCtr,
+                                  builder:
+                                      ( context,  child) {
+                                    return Opacity(
+                                        opacity: 1 - opacity.value,
+                                        child: child);
+                                  },
+                                )
+                              ],
+                            )),
+                      );
+                    },
+                  ),
+                ),
+                //Detalle
+                _isDetail
+                    ? Container(
+                    child: SingleChildScrollView(
+                      padding: EdgeInsets.only(top: 30, bottom: 20),
+                      child: DeatilBoat(
+                          controller: animationCtr,
+                          animation: opacity,
+                          currentPage: _currentPage.toInt(),
+                          animationReverse:animationReverse
                       ),
-                    );
-                  }),
-            )
-          ],
-        ),
+                    ))
+                    : Container(),
+              ],
+            )),
       ),
     );
   }
-}
 
-Widget boatWidget(
-    {required Boat boat, required Size size, required VoidCallback? onTap}) {
-  return Container(
-    width: size.width * 0.8,
-    height: size.height * 0.8,
-    padding: EdgeInsets.all(20),
-    child: Column(
-      children: [
-        Image.asset(
-          boat.image,
-          width: size.width * .35,
-          height: size.height * .6,
-        ),
-        Text(
-          boat.title,
-          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w600),
-        ),
-        SizedBox(
-          height: 10,
-        ),
-        Text(
-          "${boat.subTitle}",
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w300),
-        ),
-        SizedBox(
-          height: 20,
-        ),
-        GestureDetector(
-          onTap: onTap,
-          child: Text(
-            "Specs >",
-            style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF4540A4),
-                letterSpacing: 1.2),
-          ),
-        )
-      ],
-    ),
-  );
+  animationReverse() {
+    if (_isDetail) {
+      animationCtr.reverse();
+      Future.delayed(Duration(milliseconds: timeAnimation), () {
+        _isDetail = false;
+        setState(() {});
+      });
+    } else {
+      return null;
+    }
+  }
 }
